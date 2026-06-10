@@ -23,14 +23,8 @@ payload map (user) -> {
 			<error-handler>
 				<on-error-continue type="ANY" doc:name="Error controlado" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000006">
 					<set-variable variableName="httpStatus" value="#[502]" doc:name="Set 502" />
-					<set-payload value='#[%dw 2.0
-output application/json
----
-{
-	error: true,
-	mensaje: "No se pudo obtener la lista de usuarios",
-	detalle: error.description
-}]' doc:name="Error payload" mimeType="application/json" />
+					<set-variable variableName="errorMensaje" value="#['No se pudo obtener la lista de usuarios']" doc:name="Set mensaje" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000009" />
+					<flow-ref name="sf-error-response" doc:name="Armar respuesta de error" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000010" />
 				</on-error-continue>
 			</error-handler>
 		</try>
@@ -60,24 +54,13 @@ output application/json
 			<error-handler>
 				<on-error-continue type="APP:VALIDATION" doc:name="Error de validación" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000006">
 					<set-variable variableName="httpStatus" value="#[400]" doc:name="Set 400" />
-					<set-payload value='#[%dw 2.0
-output application/json
----
-{
-	error: true,
-	mensaje: error.description
-}]' doc:name="Error payload" mimeType="application/json" />
+					<set-variable variableName="errorMensaje" value="#[error.description]" doc:name="Set mensaje" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000009" />
+					<flow-ref name="sf-error-response" doc:name="Armar respuesta de error" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000010" />
 				</on-error-continue>
 				<on-error-continue type="DB:QUERY_EXECUTION" doc:name="Error de BD" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000008">
 					<set-variable variableName="httpStatus" value="#[409]" doc:name="Set 409" />
-					<set-payload value='#[%dw 2.0
-output application/json
----
-{
-	error: true,
-	mensaje: "El email ya está registrado",
-	detalle: error.description
-}]' doc:name="Error payload" mimeType="application/json" />
+					<set-variable variableName="errorMensaje" value="#['El email ya está registrado']" doc:name="Set mensaje" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000011" />
+					<flow-ref name="sf-error-response" doc:name="Armar respuesta de error" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000012" />
 				</on-error-continue>
 			</error-handler>
 		</try>
@@ -101,14 +84,8 @@ payload map (user) -> {
 			<error-handler>
 				<on-error-continue type="ANY" doc:name="Error controlado" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000006">
 					<set-variable variableName="httpStatus" value="#[500]" doc:name="Set 500" />
-					<set-payload value='#[%dw 2.0
-output application/json
----
-{
-	error: true,
-	mensaje: "No se pudo obtener la lista de usuarios de la base de datos",
-	detalle: error.description
-}]' doc:name="Error payload" mimeType="application/json" />
+					<set-variable variableName="errorMensaje" value="#['No se pudo obtener la lista de usuarios de la base de datos']" doc:name="Set mensaje" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000009" />
+					<flow-ref name="sf-error-response" doc:name="Armar respuesta de error" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000010" />
 				</on-error-continue>
 			</error-handler>
 		</try>

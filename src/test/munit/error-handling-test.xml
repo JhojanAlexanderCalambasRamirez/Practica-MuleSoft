@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="error-handling-test.xml" minMuleVersion="4.11.0" />
+
+	<munit:test name="sf-error-response-deberia-armar-payload-de-error" doc:id="g1d2e3f4-0001-4a4a-8a8a-000000000001" description="sf-error-response arma {error, mensaje, detalle} a partir de vars.errorMensaje">
+		<munit:execution>
+			<set-variable variableName="errorMensaje" value="#['Mensaje de prueba']" doc:name="Set errorMensaje" doc:id="g1d2e3f4-0001-4a4a-8a8a-000000000002" />
+			<flow-ref name="sf-error-response" doc:name="sf-error-response" doc:id="g1d2e3f4-0001-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="error es true" doc:id="g1d2e3f4-0001-4a4a-8a8a-000000000004" expression="#[payload.error]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="mensaje correcto" doc:id="g1d2e3f4-0001-4a4a-8a8a-000000000005" expression="#[payload.mensaje]" is="#[MunitTools::equalTo('Mensaje de prueba')]" />
+		</munit:validation>
+	</munit:test>
+
+</mule>

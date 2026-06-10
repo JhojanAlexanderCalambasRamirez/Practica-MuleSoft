@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<sub-flow name="sf-error-response" doc:id="d4c3b2a1-1111-4a4a-8a8a-100000000001">
+		<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	error: true,
+	mensaje: vars.errorMensaje,
+	detalle: error.description
+}]' doc:name="Armar payload de error" doc:id="d4c3b2a1-1111-4a4a-8a8a-100000000002" mimeType="application/json" />
+	</sub-flow>
+
+</mule>

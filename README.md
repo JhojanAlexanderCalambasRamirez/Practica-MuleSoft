@@ -17,18 +17,20 @@ Repo: https://github.com/JhojanAlexanderCalambasRamirez/Practica-MuleSoft
 
 ```
 src/main/mule/
-├── global.xml            → configs compartidas (HTTP listener, HTTP request, DB config, configuration-properties)
+├── global.xml            → configs compartidas (HTTP listener, HTTP request, DB config, configuration-properties, secure properties)
+├── error-handling.xml    → sub-flow compartido sf-error-response (payload {error, mensaje, detalle})
 ├── hello-api.xml         → flow de saludo
 ├── users-api.xml         → capa Process/Experience: endpoints HTTP de usuarios (GET externo, POST, GET db)
 ├── users-system-api.xml  → capa System API: sub-flows que hablan directo con la base de datos
 └── status-api.xml        → health check
 
 src/main/resources/
-├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB)
+├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::)
 
 src/test/munit/
 ├── status-api-test.xml        → tests de statusFlow (sin mocks)
 ├── hello-api-test.xml         → tests de hellomuleFlow (DataWeave, variables)
+├── error-handling-test.xml    → tests de sf-error-response (payload de error)
 ├── users-system-api-test.xml  → tests de sf-db-get-users / sf-db-insert-user (mockea db:select / db:insert)
 └── users-api-test.xml         → tests de usersFlow / usersCreateFlow / usersDbFlow (mockea http:request y flow-ref)
 ```
@@ -43,6 +45,8 @@ Cada archivo tiene una sola responsabilidad (cohesión). Los flows se conectan a
 - `users-api.xml` = **Process/Experience API** ("el mesero") — atiende HTTP, valida, y llama al System API vía `<flow-ref>`. No sabe nada de SQL.
 
 Si mañana cambias Postgres por MongoDB, solo tocas `users-system-api.xml`. El resto del proyecto no se entera (bajo acoplamiento en acción).
+
+**Error handling compartido (DRY):** `error-handling.xml` define el sub-flow `sf-error-response`, que arma el payload `{error, mensaje, detalle}` a partir de `vars.errorMensaje` + `error.description`. Los 4 `on-error-continue` de `users-api.xml` solo setean `vars.httpStatus` y `vars.errorMensaje`, y delegan el armado de la respuesta con `<flow-ref name="sf-error-response">` — el DataWeave de la respuesta de error vive en **un solo lugar**.
 
 ## Endpoints
 
@@ -197,14 +201,61 @@ db:
   port: "5432"
   database: "hellomule_db"
   user: "hellomule_app"
-  password: "hellomule123"
+  password: "![rAYl487kyCDa4MUnqHtGkA==]"   # cifrado, ver "Secure Configuration Properties"
 ```
 
-`global.xml` define `<db:config name="Database_Config">` con `db:generic-connection` (driver `org.postgresql.Driver`, url `jdbc:postgresql://${db.host}:${db.port}/${db.database}`).
+`global.xml` define `<db:config name="Database_Config">` con `db:generic-connection` (driver `org.postgresql.Driver`, url `jdbc:postgresql://${db.host}:${db.port}/${db.database}`, password `${secure::db.password}`).
 
 **Gotcha de classloading (Mule 4):** el DB Connector corre en su propio classloader, aislado del de la app. Aunque el driver `org.postgresql:postgresql` esté en `pom.xml`, el connector no lo ve salvo que se declare como `sharedLibrary` en la config del `mule-maven-plugin`. Sin esto: `Class 'org.postgresql.Driver' not found in classloader for artifact 'container'`.
 
 **Gotcha de `db:insert` + Postgres:** `payload.generatedKeys` viene vacío (Postgres JDBC no devuelve la fila completa sin especificar columnas). Solución usada en `sf-db-insert-user`: insertar y luego `SELECT ... WHERE email = :email` para traer la fila recién creada.
+
+## Ambientes (Configuration Properties)
+
+`config-dev.yaml` tiene los valores **default de DEV** (commiteado a git, sin secretos en texto plano gracias a Secure Configuration Properties — ver abajo).
+
+Para correr en otro ambiente **no hace falta otro archivo ni lógica de selección**: cualquier `-D<key>=<valor>` pasado a Maven/JVM **sobreescribe** la propiedad del mismo nombre que viene de `<configuration-properties file="config-dev.yaml">`. Es el mismo mecanismo que usa **CloudHub Runtime Manager** en la pestaña "Properties" de un deployment — variables que pisan los valores del `.yaml` empaquetado en el `.jar`.
+
+Verificado:
+```bash
+mvn test -o -Ddb.database=hellomule_db_prod -Dhttp.port=8082
+```
+
+→ 11/11 BUILD SUCCESS, sin tocar `config-dev.yaml`. En CloudHub esto se traduce a: subir el mismo `.jar` y, en Runtime Manager → Properties, agregar `db.database=hellomule_db_prod`, `http.port=8082`, etc.
+
+> **Nota:** Mule no soporta `${prop:default}` (valor por defecto inline) en este contexto — ni en el atributo `file` de `<configuration-properties>`, ni dentro del propio YAML. Por eso `config-dev.yaml` siempre tiene un valor literal de DEV, y el override de otros ambientes es 100% vía `-D` / Runtime Manager Properties.
+
+## Secure Configuration Properties
+
+`db.password` está cifrado en `config-dev.yaml` (no texto plano), usando el módulo `mule-secure-configuration-property-module`.
+
+**`global.xml`:**
+
+```xml
+<configuration-properties file="config-dev.yaml" />
+<secure-properties:config name="Secure_Properties_Config" file="config-dev.yaml" key="hellomule2026">
+    <secure-properties:encrypt algorithm="Blowfish" mode="CBC" />
+</secure-properties:config>
+...
+<db:generic-connection ... password="${secure::db.password}" />
+```
+
+**`config-dev.yaml`:**
+```yaml
+db:
+  password: "![rAYl487kyCDa4MUnqHtGkA==]"
+```
+
+Valores cifrados van envueltos en `![...]` y se leen con el prefijo `secure::` (no `${db.password}` — `<secure-properties:config>` solo resuelve claves `secure::*`, devuelve vacío para cualquier otra). Por eso `<configuration-properties>` (props planas) y `<secure-properties:config>` (solo `secure::`) **coexisten apuntando al mismo archivo**.
+
+**Generar / verificar el valor cifrado** con la [Secure Properties Tool](https://docs.mulesoft.com/mule-runtime/4.12/_attachments/secure-properties-tool-j17.jar) oficial de MuleSoft:
+
+```bash
+java -cp secure-properties-tool-j17.jar com.mulesoft.tools.SecurePropertiesTool string encrypt Blowfish CBC hellomule2026 "hellomule123"
+java -cp secure-properties-tool-j17.jar com.mulesoft.tools.SecurePropertiesTool string decrypt Blowfish CBC hellomule2026 "rAYl487kyCDa4MUnqHtGkA=="
+```
+
+> **Sobre la `key="hellomule2026"`:** es literal, para portfolio/DEV. En un proyecto real conviene referenciarla como `key="${mule.key}"` y pasarla por `-Dmule.key=...` (o Secure Property en Runtime Manager) — así la clave de cifrado nunca queda en el repo.
 
 ## Testing con MUnit
 
@@ -214,7 +265,7 @@ MUnit es el "JUnit de Mule": cada `<munit:test>` tiene 3 partes —
 - **`execution`**: ejecuta el flow o sub-flow bajo test con `<flow-ref>`.
 - **`validation`**: `<munit-tools:assert-that expression="#[...]" is="#[MunitTools::equalTo(...)]">` — compara el resultado con lo esperado.
 
-**4 archivos, 10 tests, todos en verde:**
+**5 archivos, 11 tests, todos en verde:**
 
 ```bash
 mvn clean test
@@ -223,6 +274,7 @@ mvn clean test
 ```text
 >> status-api-test.xml        Tests: 1, Errors: 0, Failures: 0
 >> hello-api-test.xml         Tests: 1, Errors: 0, Failures: 0
+>> error-handling-test.xml    Tests: 1, Errors: 0, Failures: 0
 >> users-system-api-test.xml  Tests: 2, Errors: 0, Failures: 0
 >> users-api-test.xml         Tests: 6, Errors: 0, Failures: 0
 ```
@@ -276,14 +328,18 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 | **MUnit** | `src/test/munit/*.xml` | "JUnit de Mule". `munit:test` = `behavior` (mocks) + `execution` (`flow-ref`) + `validation` (`assert-that`). Corre con `mvn test`. |
 | **Mocking (mock-when / then-return)** | `users-system-api-test.xml`, `users-api-test.xml` | Reemplaza un processor real (`db:select`, `http:request`, `flow-ref`) por una respuesta fija — aísla la capa bajo test de la BD/API real. |
 | **Inyección de errores en tests** | `users-api-test.xml` | `<munit-tools:error typeId="HTTP:CONNECTIVITY">` simula un fallo para probar el `error-handler` (502/409) sin que ocurra de verdad. |
-| **Test isolation (alta cohesión en tests)** | `src/test/munit/` (4 archivos) | Mismo principio que el código: un archivo de test por archivo de flow. |
+| **Test isolation (alta cohesión en tests)** | `src/test/munit/` (5 archivos) | Mismo principio que el código: un archivo de test por archivo de flow. |
+| **Error handling compartido (sub-flow)** | `error-handling.xml` (`sf-error-response`), `flow-ref` en `users-api.xml` | DRY: un solo lugar arma `{error, mensaje, detalle}`; cada flow solo setea `vars.httpStatus` + `vars.errorMensaje`. |
+| **Ambientes (override de Configuration Properties)** | `config-dev.yaml` + `-Dkey=valor` | Mismo `.jar`, distinto valor por ambiente — system properties pisan el `.yaml`; análogo a "Properties" en CloudHub Runtime Manager. |
+| **Secure Configuration Properties** | `global.xml` (`secure-properties:config`), `config-dev.yaml` (`db.password`) | Cifrar secretos (`![...]`, `secure::`) en vez de texto plano — `mule-secure-configuration-property-module`, Blowfish/CBC. |
 
 ## Roadmap — qué falta
 
 - [x] **Maven básico**: `mvn clean package`, ciclo de vida (`clean → compile → test → package`), entender `target/`.
 - [x] **API-led Connectivity**: capas Experience / Process / System API — analogía restaurante (mesero / cocina / despensa). `users-api.xml` (Process) + `users-system-api.xml` (System).
 - [x] **Persistencia real**: PostgreSQL vía DB Connector, CRUD básico (insert + select).
-- [x] **MUnit**: tests automáticos para cada flow (10 tests, mocks de DB/HTTP/flow-ref, inyección de errores).
-- [ ] **Ambientes**: `config-prod.yaml` + cómo seleccionar ambiente al correr.
-- [ ] **Secure Configuration Properties**: cifrar `db.password` con `secure::` en vez de texto plano.
+- [x] **MUnit**: tests automáticos para cada flow (11 tests, mocks de DB/HTTP/flow-ref, inyección de errores).
+- [x] **Error handling compartido**: sub-flow `sf-error-response` en `error-handling.xml`, reusado por los 4 `on-error-continue` de `users-api.xml` (DRY).
+- [x] **Ambientes**: `config-dev.yaml` con defaults + override por system properties (`-Dkey=valor`), análogo a CloudHub Runtime Manager Properties.
+- [x] **Secure Configuration Properties**: `db.password` cifrado (`![...]`, Blowfish/CBC, `secure::`) con `mule-secure-configuration-property-module`.
 - [ ] **Deploy**: llevar la app a CloudHub / Runtime Fabric.
