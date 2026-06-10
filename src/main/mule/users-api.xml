@@ -46,14 +46,16 @@ output application/json
 					<raise-error type="APP:VALIDATION" description="Los campos 'nombre' y 'email' son obligatorios" doc:name="Raise validation error" />
 				</when>
 			</choice>
+			<flow-ref name="sf-db-insert-user" doc:name="Guardar en BD" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000007" />
 			<set-payload value='#[%dw 2.0
 output application/json
 ---
 {
-	id: randomInt(10000),
+	id: payload.id,
 	nombre: payload.nombre,
 	email: payload.email,
-	mensaje: "Usuario creado (simulado, no persistido)"
+	creado: payload.created_at,
+	mensaje: "Usuario creado correctamente"
 }]' doc:name="Respuesta creación" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000005" mimeType="application/json" />
 			<error-handler>
 				<on-error-continue type="APP:VALIDATION" doc:name="Error de validación" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000006">
@@ -64,6 +66,48 @@ output application/json
 {
 	error: true,
 	mensaje: error.description
+}]' doc:name="Error payload" mimeType="application/json" />
+				</on-error-continue>
+				<on-error-continue type="DB:QUERY_EXECUTION" doc:name="Error de BD" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000008">
+					<set-variable variableName="httpStatus" value="#[409]" doc:name="Set 409" />
+					<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	error: true,
+	mensaje: "El email ya está registrado",
+	detalle: error.description
+}]' doc:name="Error payload" mimeType="application/json" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+	<flow name="usersDbFlow" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000001" >
+		<http:listener doc:name="Listener" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000002" config-ref="HTTP_Listener_config" path="/users/db" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+			<http:error-response statusCode="#[vars.httpStatus default 500]" />
+		</http:listener>
+		<try doc:name="Try" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000003">
+			<flow-ref name="sf-db-get-users" doc:name="Listar usuarios BD" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000004" />
+			<set-payload value='#[%dw 2.0
+output application/json
+---
+payload map (user) -> {
+	id: user.id,
+	nombre: user.nombre,
+	email: user.email,
+	creado: user.created_at
+}]' doc:name="Transformar usuarios" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000005" mimeType="application/json" />
+			<error-handler>
+				<on-error-continue type="ANY" doc:name="Error controlado" doc:id="a1b2c3d4-3333-4a4a-8a8a-000000000006">
+					<set-variable variableName="httpStatus" value="#[500]" doc:name="Set 500" />
+					<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	error: true,
+	mensaje: "No se pudo obtener la lista de usuarios de la base de datos",
+	detalle: error.description
 }]' doc:name="Error payload" mimeType="application/json" />
 				</on-error-continue>
 			</error-handler>

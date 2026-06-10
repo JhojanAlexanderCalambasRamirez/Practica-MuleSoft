@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<sub-flow name="sf-db-get-users" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000001">
+		<db:select doc:name="Select usuarios" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000002" config-ref="Database_Config">
+			<db:sql>SELECT id, nombre, email, created_at FROM users ORDER BY id</db:sql>
+		</db:select>
+	</sub-flow>
+
+	<sub-flow name="sf-db-insert-user" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000003">
+		<set-variable variableName="nuevoNombre" value="#[payload.nombre]" doc:name="Guardar nombre" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000006" />
+		<set-variable variableName="nuevoEmail" value="#[payload.email]" doc:name="Guardar email" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000007" />
+		<db:insert doc:name="Insert usuario" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000004" config-ref="Database_Config">
+			<db:sql>INSERT INTO users (nombre, email) VALUES (:nombre, :email)</db:sql>
+			<db:input-parameters><![CDATA[#[{nombre: vars.nuevoNombre, email: vars.nuevoEmail}]]]></db:input-parameters>
+		</db:insert>
+		<db:select doc:name="Buscar usuario insertado" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000008" config-ref="Database_Config">
+			<db:sql>SELECT id, nombre, email, created_at FROM users WHERE email = :email</db:sql>
+			<db:input-parameters><![CDATA[#[{email: vars.nuevoEmail}]]]></db:input-parameters>
+		</db:select>
+		<set-payload value="#[payload[0]]" doc:name="Tomar fila insertada" doc:id="b1c2d3e4-1111-4a4a-8a8a-100000000005" />
+	</sub-flow>
+
+</mule>

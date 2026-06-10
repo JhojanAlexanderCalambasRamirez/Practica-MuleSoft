@@ -5,3 +5,10 @@ users:
   api:
     host: "jsonplaceholder.typicode.com"
     port: "443"
+
+db:
+  host: "localhost"
+  port: "5432"
+  database: "hellomule_db"
+  user: "hellomule_app"
+  password: "hellomule123"
