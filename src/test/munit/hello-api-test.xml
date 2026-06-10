@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="hello-api-test.xml" minMuleVersion="4.11.0" />
+
+	<munit:test name="hellomuleFlow-sin-nombre-deberia-saludar-World" doc:id="d1d2e3f4-0001-4a4a-8a8a-000000000001" description="GET /hello sin query param devuelve 'Hello World'">
+		<munit:execution>
+			<flow-ref name="hellomuleFlow" doc:name="hellomuleFlow" doc:id="d1d2e3f4-0001-4a4a-8a8a-000000000002" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="message es Hello World" doc:id="d1d2e3f4-0001-4a4a-8a8a-000000000003" expression="#[payload.message]" is="#[MunitTools::equalTo('Hello World')]" />
+			<munit-tools:assert-that doc:name="saludo valido" doc:id="d1d2e3f4-0001-4a4a-8a8a-000000000004" expression="#[payload.saludo]" is="#[MunitTools::anyOf([MunitTools::equalTo('Buenos días'), MunitTools::equalTo('Buenas tardes'), MunitTools::equalTo('Buenas noches')])]" />
+		</munit:validation>
+	</munit:test>
+
+</mule>

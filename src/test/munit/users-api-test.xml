@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="users-api-test.xml" minMuleVersion="4.11.0" />
+
+	<munit:test name="usersFlow-deberia-listar-usuarios-externos" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000001" description="GET /hello/users transforma la respuesta de JsonPlaceholder (http:request mockeado)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock GET externos /users" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000002" processor="http:request">
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{ id: 1, name: "Leanne Graham", email: "Sincere@april.biz", address: { city: "Gwenborough" } },
+						{ id: 2, name: "Ervin Howell", email: "Shanna@melissa.tv", address: { city: "Wisokyburgh" } }
+					]]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="usersFlow" doc:name="usersFlow" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="2 usuarios" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000004" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(2)]" />
+			<munit-tools:assert-that doc:name="nombre mapeado" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000005" expression="#[payload[0].nombre]" is="#[MunitTools::equalTo('Leanne Graham')]" />
+			<munit-tools:assert-that doc:name="ciudad mapeada" doc:id="f1d2e3f4-0001-4a4a-8a8a-000000000006" expression="#[payload[0].ciudad]" is="#[MunitTools::equalTo('Gwenborough')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="usersFlow-deberia-responder-502-si-falla-el-externo" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000001" description="GET /hello/users responde 502 controlado si JsonPlaceholder falla (http:request mockeado con error)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock GET externos /users falla" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000002" processor="http:request">
+				<munit-tools:then-return>
+					<munit-tools:error typeId="HTTP:CONNECTIVITY" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="usersFlow" doc:name="usersFlow" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="httpStatus es 502" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000004" expression="#[vars.httpStatus]" is="#[MunitTools::equalTo(502)]" />
+			<munit-tools:assert-that doc:name="payload marca error" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000005" expression="#[payload.error]" is="#[MunitTools::equalTo(true)]" />
+			<munit-tools:assert-that doc:name="mensaje de error" doc:id="f1d2e3f4-0002-4a4a-8a8a-000000000006" expression="#[payload.mensaje]" is="#[MunitTools::equalTo('No se pudo obtener la lista de usuarios')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="usersCreateFlow-deberia-crear-usuario" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000001" description="POST /hello/users crea usuario y responde 201 (flow-ref a sf-db-insert-user mockeado)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock guardar en BD" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000002" processor="mule:flow-ref">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute attributeName="name" whereValue="sf-db-insert-user" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[{ id: 10, nombre: "Camilo", email: "camilo@gmail.com", created_at: |2026-06-10T12:00:00| }]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<set-payload value='#[{nombre: "Camilo", email: "camilo@gmail.com"}]' mimeType="application/java" doc:name="Body de entrada" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000003" />
+			<flow-ref name="usersCreateFlow" doc:name="usersCreateFlow" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000004" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="id en respuesta" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000005" expression="#[payload.id]" is="#[MunitTools::equalTo(10)]" />
+			<munit-tools:assert-that doc:name="mensaje de creacion" doc:id="f1d2e3f4-0003-4a4a-8a8a-000000000006" expression="#[payload.mensaje]" is="#[MunitTools::equalTo('Usuario creado correctamente')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="usersCreateFlow-deberia-responder-400-sin-campos-obligatorios" doc:id="f1d2e3f4-0004-4a4a-8a8a-000000000001" description="POST /hello/users sin nombre/email responde 400 (validacion, sin tocar la BD)">
+		<munit:execution>
+			<set-payload value="#[{}]" mimeType="application/java" doc:name="Body vacio" doc:id="f1d2e3f4-0004-4a4a-8a8a-000000000002" />
+			<flow-ref name="usersCreateFlow" doc:name="usersCreateFlow" doc:id="f1d2e3f4-0004-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="httpStatus es 400" doc:id="f1d2e3f4-0004-4a4a-8a8a-000000000004" expression="#[vars.httpStatus]" is="#[MunitTools::equalTo(400)]" />
+			<munit-tools:assert-that doc:name="payload marca error" doc:id="f1d2e3f4-0004-4a4a-8a8a-000000000005" expression="#[payload.error]" is="#[MunitTools::equalTo(true)]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="usersCreateFlow-deberia-responder-409-si-email-duplicado" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000001" description="POST /hello/users con email duplicado responde 409 (flow-ref a sf-db-insert-user mockeado con error de BD)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock guardar en BD falla" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000002" processor="mule:flow-ref">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute attributeName="name" whereValue="sf-db-insert-user" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="DB:QUERY_EXECUTION" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<set-payload value='#[{nombre: "Camilo", email: "camilo@gmail.com"}]' mimeType="application/java" doc:name="Body de entrada" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000003" />
+			<flow-ref name="usersCreateFlow" doc:name="usersCreateFlow" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000004" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="httpStatus es 409" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000005" expression="#[vars.httpStatus]" is="#[MunitTools::equalTo(409)]" />
+			<munit-tools:assert-that doc:name="mensaje de email duplicado" doc:id="f1d2e3f4-0005-4a4a-8a8a-000000000006" expression="#[payload.mensaje]" is="#[MunitTools::equalTo('El email ya está registrado')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="usersDbFlow-deberia-listar-usuarios-de-bd" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000001" description="GET /hello/users/db transforma las filas de la BD (flow-ref a sf-db-get-users mockeado)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock listar usuarios BD" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000002" processor="mule:flow-ref">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute attributeName="name" whereValue="sf-db-get-users" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{ id: 1, nombre: "Alex", email: "alex@gmail.com", created_at: |2026-06-10T10:17:45| }
+					]]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="usersDbFlow" doc:name="usersDbFlow" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="1 usuario" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000004" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(1)]" />
+			<munit-tools:assert-that doc:name="nombre mapeado" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000005" expression="#[payload[0].nombre]" is="#[MunitTools::equalTo('Alex')]" />
+			<munit-tools:assert-that doc:name="campo creado existe" doc:id="f1d2e3f4-0006-4a4a-8a8a-000000000006" expression="#[payload[0].creado]" is="#[MunitTools::notNullValue()]" />
+		</munit:validation>
+	</munit:test>
+
+</mule>

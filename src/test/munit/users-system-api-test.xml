@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="users-system-api-test.xml" minMuleVersion="4.11.0" />
+
+	<munit:test name="sf-db-get-users-deberia-listar-usuarios" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000001" description="sf-db-get-users devuelve las filas que entrega la DB (db:select mockeado)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock db:select" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000002" processor="db:select">
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{ id: 1, nombre: "Alex", email: "alex@gmail.com", created_at: |2026-06-10T10:17:45| },
+						{ id: 3, nombre: "Camilo", email: "camilo@gmail.com", created_at: |2026-06-10T10:25:29| }
+					]]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="sf-db-get-users" doc:name="sf-db-get-users" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000003" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="2 usuarios" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000004" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(2)]" />
+			<munit-tools:assert-that doc:name="primer usuario es Alex" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000005" expression="#[payload[0].nombre]" is="#[MunitTools::equalTo('Alex')]" />
+			<munit-tools:assert-that doc:name="segundo email correcto" doc:id="e1d2e3f4-0001-4a4a-8a8a-000000000006" expression="#[payload[1].email]" is="#[MunitTools::equalTo('camilo@gmail.com')]" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="sf-db-insert-user-deberia-retornar-fila-creada" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000001" description="sf-db-insert-user hace insert + select y devuelve la fila creada (db:insert y db:select mockeados)">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock db:insert" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000002" processor="db:insert">
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[{ affectedRows: 1, generatedKeys: {} }]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<munit-tools:mock-when doc:name="Mock db:select" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000003" processor="db:select">
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{ id: 5, nombre: "Camilo", email: "camilo@gmail.com", created_at: |2026-06-10T10:25:29| }
+					]]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<set-payload value='#[{nombre: "Camilo", email: "camilo@gmail.com"}]' mimeType="application/java" doc:name="Body de entrada" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000004" />
+			<flow-ref name="sf-db-insert-user" doc:name="sf-db-insert-user" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000005" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="id generado" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000006" expression="#[payload.id]" is="#[MunitTools::equalTo(5)]" />
+			<munit-tools:assert-that doc:name="nombre correcto" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000007" expression="#[payload.nombre]" is="#[MunitTools::equalTo('Camilo')]" />
+			<munit-tools:assert-that doc:name="email correcto" doc:id="e1d2e3f4-0002-4a4a-8a8a-000000000008" expression="#[payload.email]" is="#[MunitTools::equalTo('camilo@gmail.com')]" />
+		</munit:validation>
+	</munit:test>
+
+</mule>

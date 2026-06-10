@@ -47,3 +47,6 @@ target/
 velocity.log
 .tooling-project
 .tooling-project
+
+# DataWeave Playground (auto-generado por Mule DX al editar transforms)
+src/test/resources/embedded-dw_*/

@@ -25,7 +25,15 @@ src/main/mule/
 
 src/main/resources/
 ├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB)
+
+src/test/munit/
+├── status-api-test.xml        → tests de statusFlow (sin mocks)
+├── hello-api-test.xml         → tests de hellomuleFlow (DataWeave, variables)
+├── users-system-api-test.xml  → tests de sf-db-get-users / sf-db-insert-user (mockea db:select / db:insert)
+└── users-api-test.xml         → tests de usersFlow / usersCreateFlow / usersDbFlow (mockea http:request y flow-ref)
 ```
+
+**Mismo principio en los tests:** un archivo de test por archivo de flow. Los tests de la capa Process (`users-api-test.xml`) mockean el `flow-ref` hacia la System API — no necesitan Postgres corriendo. Los tests de la System API (`users-system-api-test.xml`) mockean `db:select`/`db:insert` directamente.
 
 **Por qué está separado así (alta cohesión / bajo acoplamiento):**
 Cada archivo tiene una sola responsabilidad (cohesión). Los flows se conectan a las configs de `global.xml` solo por **nombre** (`config-ref`), no por dependencia directa de archivo (acoplamiento bajo). Mule carga todos los XML de `src/main/mule/` como un solo dominio de configuración.
@@ -198,6 +206,51 @@ db:
 
 **Gotcha de `db:insert` + Postgres:** `payload.generatedKeys` viene vacío (Postgres JDBC no devuelve la fila completa sin especificar columnas). Solución usada en `sf-db-insert-user`: insertar y luego `SELECT ... WHERE email = :email` para traer la fila recién creada.
 
+## Testing con MUnit
+
+MUnit es el "JUnit de Mule": cada `<munit:test>` tiene 3 partes —
+
+- **`behavior`** (opcional): mocks. `<munit-tools:mock-when processor="db:select">` reemplaza un processor real por una respuesta fija (`<munit-tools:then-return>`), sin tocar Postgres, APIs externas, etc.
+- **`execution`**: ejecuta el flow o sub-flow bajo test con `<flow-ref>`.
+- **`validation`**: `<munit-tools:assert-that expression="#[...]" is="#[MunitTools::equalTo(...)]">` — compara el resultado con lo esperado.
+
+**4 archivos, 10 tests, todos en verde:**
+
+```bash
+mvn clean test
+```
+
+```text
+>> status-api-test.xml        Tests: 1, Errors: 0, Failures: 0
+>> hello-api-test.xml         Tests: 1, Errors: 0, Failures: 0
+>> users-system-api-test.xml  Tests: 2, Errors: 0, Failures: 0
+>> users-api-test.xml         Tests: 6, Errors: 0, Failures: 0
+```
+
+**Mocking de processors (`db:select`, `db:insert`, `http:request`, `flow-ref`):**
+
+```xml
+<munit-tools:mock-when processor="db:select">
+    <munit-tools:then-return>
+        <munit-tools:payload value='#[[{ id: 1, nombre: "Alex", email: "alex@gmail.com" }]]' mediaType="application/java" />
+    </munit-tools:then-return>
+</munit-tools:mock-when>
+```
+
+`processor="mule:flow-ref"` + `<munit-tools:with-attributes><munit-tools:with-attribute attributeName="name" whereValue="sf-db-insert-user" /></munit-tools:with-attributes>` permite mockear **solo** el `flow-ref` hacia la System API — el test de `usersCreateFlow` no necesita Postgres real.
+
+**Inyección de errores** (para probar `error-handler` sin que el fallo ocurra de verdad):
+
+```xml
+<munit-tools:then-return>
+    <munit-tools:error typeId="HTTP:CONNECTIVITY" />
+</munit-tools:then-return>
+```
+
+Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY"` → el test verifica `vars.httpStatus == 502`.
+
+**Limitación encontrada:** mockear `attributes.queryParams` de un `http:listener` vía `<munit:set-event>` no funciona de forma confiable en MUnit 3.7.1 (el valor llega `null` al flow). Por eso `hello-api-test.xml` solo cubre el caso sin query param — los casos con query param se prueban manualmente (Postman/curl), documentado como conocimiento real de los límites de la herramienta.
+
 ## Conceptos cubiertos
 
 | Concepto | Dónde se usa | Idea clave |
@@ -220,13 +273,17 @@ db:
 | **Sub-flow + flow-ref** | `users-api.xml` → `users-system-api.xml` | Reutilizar lógica entre flows; base técnica del API-led layering (Process llama a System). |
 | **API-led Connectivity** | `users-api.xml` (Process) + `users-system-api.xml` (System) | Capas por responsabilidad: System = acceso a datos, Process/Experience = expone HTTP. |
 | **Maven (avanzado)** | `pom.xml` (`sharedLibraries`) | Classloading aislado por conector — un driver JDBC necesita declararse explícitamente para ser visible. |
+| **MUnit** | `src/test/munit/*.xml` | "JUnit de Mule". `munit:test` = `behavior` (mocks) + `execution` (`flow-ref`) + `validation` (`assert-that`). Corre con `mvn test`. |
+| **Mocking (mock-when / then-return)** | `users-system-api-test.xml`, `users-api-test.xml` | Reemplaza un processor real (`db:select`, `http:request`, `flow-ref`) por una respuesta fija — aísla la capa bajo test de la BD/API real. |
+| **Inyección de errores en tests** | `users-api-test.xml` | `<munit-tools:error typeId="HTTP:CONNECTIVITY">` simula un fallo para probar el `error-handler` (502/409) sin que ocurra de verdad. |
+| **Test isolation (alta cohesión en tests)** | `src/test/munit/` (4 archivos) | Mismo principio que el código: un archivo de test por archivo de flow. |
 
 ## Roadmap — qué falta
 
 - [x] **Maven básico**: `mvn clean package`, ciclo de vida (`clean → compile → test → package`), entender `target/`.
 - [x] **API-led Connectivity**: capas Experience / Process / System API — analogía restaurante (mesero / cocina / despensa). `users-api.xml` (Process) + `users-system-api.xml` (System).
 - [x] **Persistencia real**: PostgreSQL vía DB Connector, CRUD básico (insert + select).
-- [ ] **MUnit**: tests automáticos para cada flow.
+- [x] **MUnit**: tests automáticos para cada flow (10 tests, mocks de DB/HTTP/flow-ref, inyección de errores).
 - [ ] **Ambientes**: `config-prod.yaml` + cómo seleccionar ambiente al correr.
 - [ ] **Secure Configuration Properties**: cifrar `db.password` con `secure::` en vez de texto plano.
 - [ ] **Deploy**: llevar la app a CloudHub / Runtime Fabric.

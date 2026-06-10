@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="status-api-test.xml" minMuleVersion="4.11.0" />
+
+	<munit:test name="statusFlow-deberia-responder-UP" doc:id="c1d2e3f4-0001-4a4a-8a8a-000000000001" description="GET /hello/status responde status UP, app hellomule y timestamp">
+		<munit:execution>
+			<flow-ref name="statusFlow" doc:name="statusFlow" doc:id="c1d2e3f4-0001-4a4a-8a8a-000000000002" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="status es UP" doc:id="c1d2e3f4-0001-4a4a-8a8a-000000000003" expression="#[payload.status]" is="#[MunitTools::equalTo('UP')]" />
+			<munit-tools:assert-that doc:name="app es hellomule" doc:id="c1d2e3f4-0001-4a4a-8a8a-000000000004" expression="#[payload.app]" is="#[MunitTools::equalTo('hellomule')]" />
+			<munit-tools:assert-that doc:name="timestamp existe" doc:id="c1d2e3f4-0001-4a4a-8a8a-000000000005" expression="#[payload.timestamp]" is="#[MunitTools::notNullValue()]" />
+		</munit:validation>
+	</munit:test>
+
+</mule>
