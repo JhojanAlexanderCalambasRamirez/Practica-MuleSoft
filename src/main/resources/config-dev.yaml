@@ -1,0 +1,7 @@
+http:
+  port: "8081"
+
+users:
+  api:
+    host: "jsonplaceholder.typicode.com"
+    port: "443"
