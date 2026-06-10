@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="usersFlow" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000001" >
+		<http:listener doc:name="Listener" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000002" config-ref="HTTP_Listener_config" path="/users" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+			<http:error-response statusCode="#[vars.httpStatus default 500]" />
+		</http:listener>
+		<try doc:name="Try" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000003">
+			<http:request method="GET" doc:name="GET externos /users" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000004" config-ref="JsonPlaceholder_Request_config" path="/users" />
+			<set-payload value='#[%dw 2.0
+output application/json
+---
+payload map (user) -> {
+	id: user.id,
+	nombre: user.name,
+	email: user.email,
+	ciudad: user.address.city
+}]' doc:name="Transformar usuarios" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000005" mimeType="application/json" />
+			<error-handler>
+				<on-error-continue type="ANY" doc:name="Error controlado" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000006">
+					<set-variable variableName="httpStatus" value="#[502]" doc:name="Set 502" />
+					<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	error: true,
+	mensaje: "No se pudo obtener la lista de usuarios",
+	detalle: error.description
+}]' doc:name="Error payload" mimeType="application/json" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+	<flow name="usersCreateFlow" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000001" >
+		<http:listener doc:name="Listener" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000002" config-ref="HTTP_Listener_config" path="/users" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 201]" />
+			<http:error-response statusCode="#[vars.httpStatus default 400]" />
+		</http:listener>
+		<try doc:name="Try" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000003">
+			<choice doc:name="Validar body" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000004">
+				<when expression="#[isEmpty(payload.nombre) or isEmpty(payload.email)]">
+					<raise-error type="APP:VALIDATION" description="Los campos 'nombre' y 'email' son obligatorios" doc:name="Raise validation error" />
+				</when>
+			</choice>
+			<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	id: randomInt(10000),
+	nombre: payload.nombre,
+	email: payload.email,
+	mensaje: "Usuario creado (simulado, no persistido)"
+}]' doc:name="Respuesta creación" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000005" mimeType="application/json" />
+			<error-handler>
+				<on-error-continue type="APP:VALIDATION" doc:name="Error de validación" doc:id="a1b2c3d4-2222-4a4a-8a8a-000000000006">
+					<set-variable variableName="httpStatus" value="#[400]" doc:name="Set 400" />
+					<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	error: true,
+	mensaje: error.description
+}]' doc:name="Error payload" mimeType="application/json" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+</mule>

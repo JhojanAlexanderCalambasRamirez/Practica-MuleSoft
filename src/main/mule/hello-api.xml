@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="hellomuleFlow" doc:id="3885aa2d-4fbb-4a12-b1a5-bf657b7f695a" >
+		<http:listener doc:name="Listener" doc:id="2df21f70-f7ea-40ad-8507-cfffa5e3b94f" config-ref="HTTP_Listener_config" path="/"/>
+		<logger level="INFO" doc:name="Logger" message="#['Request recibido. Query params: ' ++ write(attributes.queryParams, 'application/json')]" />
+		<set-variable variableName="saludo" value="#[if (now().hour &lt; 12) 'Buenos días' else if (now().hour &lt; 19) 'Buenas tardes' else 'Buenas noches']" doc:name="Set saludo" />
+		<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	saludo: vars.saludo,
+	message: "Hello " ++ (attributes.queryParams.nombre default "World")
+}]' doc:name="Set Payload" doc:id="cca62be8-dacc-4e9f-a44c-6fc2b4087511" mimeType="application/json" />
+	</flow>
+</mule>

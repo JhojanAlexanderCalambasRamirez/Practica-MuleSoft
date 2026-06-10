@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="statusFlow" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000007" >
+		<http:listener doc:name="Listener" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000008" config-ref="HTTP_Listener_config" path="/status"/>
+		<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	status: "UP",
+	app: "hellomule",
+	timestamp: now()
+}]' doc:name="Set Payload" doc:id="a1b2c3d4-1111-4a4a-8a8a-000000000009" mimeType="application/json" />
+	</flow>
+</mule>
