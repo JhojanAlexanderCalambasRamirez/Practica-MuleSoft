@@ -17,6 +17,6 @@ http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/sc
 		<http:request-connection protocol="HTTPS" host="${users.api.host}" port="${users.api.port}" />
 	</http:request-config>
 	<db:config name="Database_Config" doc:name="Database Config">
-		<db:generic-connection url="jdbc:postgresql://${db.host}:${db.port}/${db.database}" driverClassName="org.postgresql.Driver" user="${db.user}" password="${secure::db.password}" />
+		<db:generic-connection url="jdbc:postgresql://${db.host}:${db.port}/${db.database}?sslmode=${db.sslmode}" driverClassName="org.postgresql.Driver" user="${db.user}" password="${secure::db.password}" />
 	</db:config>
 </mule>

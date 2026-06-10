@@ -25,7 +25,7 @@ src/main/mule/
 └── status-api.xml        → health check
 
 src/main/resources/
-├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::)
+├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::; db.sslmode disable/require según ambiente)
 
 src/test/munit/
 ├── status-api-test.xml        → tests de statusFlow (sin mocks)
@@ -202,9 +202,10 @@ db:
   database: "hellomule_db"
   user: "hellomule_app"
   password: "![rAYl487kyCDa4MUnqHtGkA==]"   # cifrado, ver "Secure Configuration Properties"
+  sslmode: "disable"   # "require" en Neon/CloudHub, ver sección Deploy
 ```
 
-`global.xml` define `<db:config name="Database_Config">` con `db:generic-connection` (driver `org.postgresql.Driver`, url `jdbc:postgresql://${db.host}:${db.port}/${db.database}`, password `${secure::db.password}`).
+`global.xml` define `<db:config name="Database_Config">` con `db:generic-connection` (driver `org.postgresql.Driver`, url `jdbc:postgresql://${db.host}:${db.port}/${db.database}?sslmode=${db.sslmode}`, password `${secure::db.password}`).
 
 **Gotcha de classloading (Mule 4):** el DB Connector corre en su propio classloader, aislado del de la app. Aunque el driver `org.postgresql:postgresql` esté en `pom.xml`, el connector no lo ve salvo que se declare como `sharedLibrary` en la config del `mule-maven-plugin`. Sin esto: `Class 'org.postgresql.Driver' not found in classloader for artifact 'container'`.
 
@@ -256,6 +257,36 @@ java -cp secure-properties-tool-j17.jar com.mulesoft.tools.SecurePropertiesTool 
 ```
 
 > **Sobre la `key="hellomule2026"`:** es literal, para portfolio/DEV. En un proyecto real conviene referenciarla como `key="${mule.key}"` y pasarla por `-Dmule.key=...` (o Secure Property en Runtime Manager) — así la clave de cifrado nunca queda en el repo.
+
+## Deploy (CloudHub 2.0)
+
+App corriendo en **CloudHub 2.0** (Anypoint Platform), target `Cloudhub-US-East-2` (US East / Ohio, Public Space).
+
+**URL pública:** <https://hellomule-pyuq0i.5sc6y6-2.usa-e2.cloudhub.io/hello>
+
+**Cómo se desplegó:**
+
+1. `mvn clean package -DskipTests` → genera `target/hellomule-1.0.0-SNAPSHOT-mule-application.jar`.
+2. Runtime Manager → Applications → Deploy Application → subir el `.jar` manualmente (no `mvn deploy`, ver gotcha).
+3. Runtime: Edge channel, Mule `4.11.5`, Java `17`, 1 replica / 0.1 vCore (defaults).
+4. Pestaña **Properties** del deploy — mismo mecanismo que "Ambientes" (arriba), pero seteado en Runtime Manager en vez de `-D`:
+
+| Key | Value |
+| --- | --- |
+| `db.host` | host de la DB en la nube (`*.neon.tech`) |
+| `db.port` | `5432` |
+| `db.database` | `neondb` |
+| `db.user` | `neondb_owner` |
+| `db.sslmode` | `require` |
+| `secure::db.password` | password en **texto plano** (ver gotcha) |
+
+**Base de datos:** Postgres local no es accesible desde internet → se creó una DB serverless gratis en [Neon](https://neon.tech) (región `us-east-2`, misma región que CloudHub), con la misma tabla `users` (mismo schema que local).
+
+**`db.sslmode` (nuevo):** Neon exige SSL; Postgres local no. Se agregó `db.sslmode` a `config-dev.yaml` (`"disable"` para local) y a la URL JDBC en `global.xml`: `?sslmode=${db.sslmode}`. En CloudHub se sobreescribe a `require` vía Properties.
+
+**Gotcha — `secure::db.password` como Property de CloudHub no desencripta:** localmente, `${secure::db.password}` se resuelve desencriptando `db.password` de `config-dev.yaml` (Blowfish/CBC). Pero un Property de Runtime Manager con key `secure::db.password` se inyecta como system property y **pisa el placeholder con el valor literal, sin pasar por el desencriptado**. Si se pone ahí el valor cifrado (`![...]`), Postgres recibe esa string literal como password → `password authentication failed`. Conclusión: en Runtime Manager esa property va en **texto plano** (no `![...]`), marcada como "Secure" (ícono candado) para que CloudHub la enmascare en la UI — es una capa de seguridad de plataforma, distinta a la de `mule-secure-configuration-property-module` (que protege el secreto dentro del `.jar`).
+
+**Gotcha — `mvn deploy` no es viable para CH2 sin Exchange:** el `mule-maven-plugin` (`cloudhub2Deployment`) requiere que el `.jar` esté publicado como asset de Exchange (`groupId` = UUID de la org + `distributionManagement` + credenciales en `settings.xml`). Cambiar el `groupId` del proyecto (`com.mycompany`) por un UUID era demasiado invasivo para este repo → se optó por **deploy manual vía Runtime Manager UI**.
 
 ## Testing con MUnit
 
@@ -332,6 +363,7 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 | **Error handling compartido (sub-flow)** | `error-handling.xml` (`sf-error-response`), `flow-ref` en `users-api.xml` | DRY: un solo lugar arma `{error, mensaje, detalle}`; cada flow solo setea `vars.httpStatus` + `vars.errorMensaje`. |
 | **Ambientes (override de Configuration Properties)** | `config-dev.yaml` + `-Dkey=valor` | Mismo `.jar`, distinto valor por ambiente — system properties pisan el `.yaml`; análogo a "Properties" en CloudHub Runtime Manager. |
 | **Secure Configuration Properties** | `global.xml` (`secure-properties:config`), `config-dev.yaml` (`db.password`) | Cifrar secretos (`![...]`, `secure::`) en vez de texto plano — `mule-secure-configuration-property-module`, Blowfish/CBC. |
+| **Deploy a CloudHub 2.0** | Runtime Manager (deploy manual del `.jar`) | Mismo `.jar` + Properties (igual que "Ambientes") corre en la nube; DB cloud (Neon) requiere SSL → `db.sslmode=require`. |
 
 ## Roadmap — qué falta
 
@@ -342,4 +374,4 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 - [x] **Error handling compartido**: sub-flow `sf-error-response` en `error-handling.xml`, reusado por los 4 `on-error-continue` de `users-api.xml` (DRY).
 - [x] **Ambientes**: `config-dev.yaml` con defaults + override por system properties (`-Dkey=valor`), análogo a CloudHub Runtime Manager Properties.
 - [x] **Secure Configuration Properties**: `db.password` cifrado (`![...]`, Blowfish/CBC, `secure::`) con `mule-secure-configuration-property-module`.
-- [ ] **Deploy**: llevar la app a CloudHub / Runtime Fabric.
+- [x] **Deploy**: app corriendo en CloudHub 2.0 (`Cloudhub-US-East-2`), DB en Neon Postgres serverless, deploy manual vía Runtime Manager UI (`.jar` + Properties).

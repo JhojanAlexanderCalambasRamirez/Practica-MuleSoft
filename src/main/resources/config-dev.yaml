@@ -12,3 +12,4 @@ db:
   database: "hellomule_db"
   user: "hellomule_app"
   password: "![rAYl487kyCDa4MUnqHtGkA==]"
+  sslmode: "disable"
