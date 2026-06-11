@@ -26,6 +26,8 @@ src/main/mule/
 
 src/main/resources/
 ├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::; db.sslmode disable/require según ambiente)
+└── api/
+    └── hellomule.raml  → contrato RAML 1.0 de la API (documentación, no genera código)
 
 src/test/munit/
 ├── status-api-test.xml        → tests de statusFlow (sin mocks)
@@ -169,6 +171,41 @@ GET http://localhost:8081/hello/status
   "timestamp": "2026-06-09T19:30:00-05:00"
 }
 ```
+
+## API Spec (RAML)
+
+`src/main/resources/api/hellomule.raml` describe el **contrato** de la API: los 5 endpoints de arriba, sus tipos (`types:`), query params, request bodies y responses (200/201/400/409/502), con ejemplos.
+
+Es **documentación**, no genera código (eso sería "contract-first" con APIKit, un paso más adelante). Sirve para que cualquiera —frontend, otro equipo, Postman— entienda la API sin leer los flows de Mule.
+
+Estructura básica de RAML 1.0:
+
+```yaml
+#%RAML 1.0
+title: hellomule API
+baseUri: https://hellomule-pyuq0i.5sc6y6-2.usa-e2.cloudhub.io/hello
+
+types:
+  Saludo:
+    type: object
+    properties:
+      saludo: string
+      message: string
+
+/:
+  get:
+    queryParameters:
+      nombre?: string
+    responses:
+      200:
+        body:
+          application/json:
+            type: Saludo
+```
+
+`types:` define los shapes reutilizables (como un DTO). `?` después del nombre = opcional (`nombre?`, `detalle?`). Los recursos anidados (`/users` → `/db`) se escriben con indentación YAML, igual que `/hello/users/db` en el HTTP listener.
+
+**Cómo verlo:** la extensión Mule DX / API Console (VS Code) puede previsualizar el `.raml` con la UI tipo Swagger.
 
 ## Persistencia con PostgreSQL
 
@@ -364,6 +401,7 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 | **Ambientes (override de Configuration Properties)** | `config-dev.yaml` + `-Dkey=valor` | Mismo `.jar`, distinto valor por ambiente — system properties pisan el `.yaml`; análogo a "Properties" en CloudHub Runtime Manager. |
 | **Secure Configuration Properties** | `global.xml` (`secure-properties:config`), `config-dev.yaml` (`db.password`) | Cifrar secretos (`![...]`, `secure::`) en vez de texto plano — `mule-secure-configuration-property-module`, Blowfish/CBC. |
 | **Deploy a CloudHub 2.0** | Runtime Manager (deploy manual del `.jar`) | Mismo `.jar` + Properties (igual que "Ambientes") corre en la nube; DB cloud (Neon) requiere SSL → `db.sslmode=require`. |
+| **RAML (API Spec)** | `src/main/resources/api/hellomule.raml` | Contrato de la API: `types`, query params, request/response bodies, status codes — documentación independiente del código. |
 
 ## Roadmap — qué falta
 
@@ -375,3 +413,8 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 - [x] **Ambientes**: `config-dev.yaml` con defaults + override por system properties (`-Dkey=valor`), análogo a CloudHub Runtime Manager Properties.
 - [x] **Secure Configuration Properties**: `db.password` cifrado (`![...]`, Blowfish/CBC, `secure::`) con `mule-secure-configuration-property-module`.
 - [x] **Deploy**: app corriendo en CloudHub 2.0 (`Cloudhub-US-East-2`), DB en Neon Postgres serverless, deploy manual vía Runtime Manager UI (`.jar` + Properties).
+- [x] **RAML (API Spec)**: contrato `hellomule.raml` documentando los 5 endpoints (`types`, query params, bodies, responses 200/201/400/409/502).
+- [ ] **API Manager — Policies**: aplicar una policy (Rate Limiting o Client ID Enforcement) sobre la app desplegada.
+- [ ] **Logger + Correlation ID**: trazabilidad en los flows.
+- [ ] **Scatter-Gather / For Each**: procesamiento paralelo.
+- [ ] **CI/CD básico**: GitHub Actions corriendo `mvn test` en cada push.
