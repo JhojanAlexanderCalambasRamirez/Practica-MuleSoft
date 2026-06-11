@@ -17,7 +17,7 @@ Repo: https://github.com/JhojanAlexanderCalambasRamirez/Practica-MuleSoft
 
 ```
 src/main/mule/
-├── global.xml            → configs compartidas (HTTP listener, HTTP request, DB config, configuration-properties, secure properties)
+├── global.xml            → configs compartidas (HTTP listener, HTTP request, DB config, configuration-properties, secure properties, API Gateway Autodiscovery)
 ├── error-handling.xml    → sub-flow compartido sf-error-response (payload {error, mensaje, detalle})
 ├── hello-api.xml         → flow de saludo
 ├── users-api.xml         → capa Process/Experience: endpoints HTTP de usuarios (GET externo, POST, GET db)
@@ -25,7 +25,7 @@ src/main/mule/
 └── status-api.xml        → health check
 
 src/main/resources/
-├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::; db.sslmode disable/require según ambiente)
+├── config-dev.yaml  → propiedades de ambiente (puerto, host de API externa, conexión DB; db.password cifrado con secure::; db.sslmode disable/require según ambiente; api.id para Autodiscovery)
 └── api/
     └── hellomule.raml  → contrato RAML 1.0 de la API (documentación, no genera código)
 
@@ -325,6 +325,61 @@ App corriendo en **CloudHub 2.0** (Anypoint Platform), target `Cloudhub-US-East-
 
 **Gotcha — `mvn deploy` no es viable para CH2 sin Exchange:** el `mule-maven-plugin` (`cloudhub2Deployment`) requiere que el `.jar` esté publicado como asset de Exchange (`groupId` = UUID de la org + `distributionManagement` + credenciales en `settings.xml`). Cambiar el `groupId` del proyecto (`com.mycompany`) por un UUID era demasiado invasivo para este repo → se optó por **deploy manual vía Runtime Manager UI**.
 
+## API Manager: Autodiscovery + Policies
+
+La app desplegada se registró en **API Manager** (instancia `hellomule-api`, API Instance ID `20964075`) para poder gobernarla con **Policies** sin tocar el código de los flows.
+
+**Crear la instancia (UI de API Manager):**
+
+1. Add new API → Mule Gateway → "Connect to existing application (basic endpoint)" (= Autodiscovery).
+2. Subir `hellomule.raml` como contrato.
+3. Consumer endpoint = Upstream URL = `https://hellomule-pyuq0i.5sc6y6-2.usa-e2.cloudhub.io/hello` (la URL ya desplegada).
+4. Resultado: instancia creada con status **"Unregistered"** — falta que la app se conecte vía Autodiscovery.
+
+**Autodiscovery (`global.xml`):**
+
+```xml
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" ...>
+    <api-gateway:autodiscovery apiId="${api.id}" flowRef="hellomuleFlow" ignoreBasePath="true" />
+```
+
+- `apiId`: API Instance ID de API Manager (`20964075`, vía `config-dev.yaml` → `api.id`).
+- `flowRef`: nombre del flow cuyo `http:listener-config` se asocia a la API (`hellomuleFlow`, el listener compartido de `/hello`).
+- Nueva dependencia en `pom.xml`: `com.mulesoft.anypoint:mule-module-autodiscovery` (scope `provided`, misma versión que `app.runtime`).
+
+**Gotcha — credenciales de Anypoint Platform:** Autodiscovery necesita autenticarse contra API Manager para registrar la instancia. Sin credenciales, el log muestra `Client ID or Client Secret were not provided. API Platform client is DISABLED` y CloudHub bloquea el deploy en **0/1 replicas, "Not running"** (readiness probe: `409: API Not Ready. Awaiting for successful API tracking`).
+
+Solución: 2 Properties nuevas en Runtime Manager, con credenciales de **Access Management → Business Groups → (org)** (Client ID / Client Secret a nivel de organización). Un Connected App propio con scope acotado ("Manage APIs Configuration") dio `422 Unprocessable Entity` — las credenciales de org sí funcionan:
+
+| Key | Value |
+| --- | --- |
+| `anypoint.platform.client_id` | Client ID del Business Group |
+| `anypoint.platform.client_secret` | Client Secret del Business Group (Secure) |
+
+Tras el redeploy, "hellomule-api" pasa a status **"Active"**.
+
+**Policy aplicada — Rate Limiting:**
+
+En el tab **Policies** se aplicó **Rate Limiting** (5 requests / 1 minuto) sobre el resource `GET /` (RAML `/`).
+
+```bash
+for i in $(seq 1 7); do curl -s -o /dev/null -w "%{http_code}\n" https://hellomule-pyuq0i.5sc6y6-2.usa-e2.cloudhub.io/hello; done
+# 200 200 200 200 200 429 429
+```
+
+Respuesta al exceder la cuota:
+
+```text
+HTTP/1.1 429 Too Many Requests
+x-ratelimit-remaining: 0
+x-ratelimit-limit: 5
+x-ratelimit-reset: 20307
+
+{ "error": "Quota has been exceeded" }
+```
+
+**Punto clave:** la policy quedó **scoped a un resource específico** (`GET /`) — `/hello/status` y los demás endpoints siguen sin límite. Es "alta cohesión" aplicada al gateway: cada resource puede tener sus propias policies según su criticidad (un health check no debería rate-limitearse, un endpoint de negocio sí).
+
 ## Testing con MUnit
 
 MUnit es el "JUnit de Mule": cada `<munit:test>` tiene 3 partes —
@@ -402,6 +457,7 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 | **Secure Configuration Properties** | `global.xml` (`secure-properties:config`), `config-dev.yaml` (`db.password`) | Cifrar secretos (`![...]`, `secure::`) en vez de texto plano — `mule-secure-configuration-property-module`, Blowfish/CBC. |
 | **Deploy a CloudHub 2.0** | Runtime Manager (deploy manual del `.jar`) | Mismo `.jar` + Properties (igual que "Ambientes") corre en la nube; DB cloud (Neon) requiere SSL → `db.sslmode=require`. |
 | **RAML (API Spec)** | `src/main/resources/api/hellomule.raml` | Contrato de la API: `types`, query params, request/response bodies, status codes — documentación independiente del código. |
+| **API Manager: Autodiscovery + Policies** | `global.xml` (`api-gateway:autodiscovery`), API Manager UI | Conectar la app desplegada con API Manager (`apiId` + credenciales de Anypoint Platform) para aplicar **Policies** (rate limiting, seguridad) por resource, sin tocar el código — gobierno de APIs separado del desarrollo. |
 
 ## Roadmap — qué falta
 
@@ -414,7 +470,7 @@ Esto simula que `http:request` falla → dispara el `on-error-continue type="ANY
 - [x] **Secure Configuration Properties**: `db.password` cifrado (`![...]`, Blowfish/CBC, `secure::`) con `mule-secure-configuration-property-module`.
 - [x] **Deploy**: app corriendo en CloudHub 2.0 (`Cloudhub-US-East-2`), DB en Neon Postgres serverless, deploy manual vía Runtime Manager UI (`.jar` + Properties).
 - [x] **RAML (API Spec)**: contrato `hellomule.raml` documentando los 5 endpoints (`types`, query params, bodies, responses 200/201/400/409/502).
-- [ ] **API Manager — Policies**: aplicar una policy (Rate Limiting o Client ID Enforcement) sobre la app desplegada.
+- [x] **API Manager — Policies**: instancia `hellomule-api` registrada vía Autodiscovery (`apiId` `20964075`), policy de Rate Limiting (5 req/min) aplicada sobre `GET /`.
 - [ ] **Logger + Correlation ID**: trazabilidad en los flows.
 - [ ] **Scatter-Gather / For Each**: procesamiento paralelo.
 - [ ] **CI/CD básico**: GitHub Actions corriendo `mvn test` en cada push.

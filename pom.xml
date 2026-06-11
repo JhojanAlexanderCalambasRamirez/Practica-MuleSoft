@@ -94,6 +94,12 @@
 			<classifier>mule-plugin</classifier>
 		</dependency>
 		<dependency>
+			<groupId>com.mulesoft.anypoint</groupId>
+			<artifactId>mule-module-autodiscovery</artifactId>
+			<version>${app.runtime}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.mulesoft.munit</groupId>
 			<artifactId>munit-runner</artifactId>
 			<version>${munit.version}</version>

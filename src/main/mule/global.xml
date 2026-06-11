@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns="http://www.mulesoft.org/schema/mule/core"
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns="http://www.mulesoft.org/schema/mule/core"
 	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
 	<configuration-properties doc:name="Configuration properties" file="config-dev.yaml" />
+	<api-gateway:autodiscovery apiId="${api.id}" flowRef="hellomuleFlow" ignoreBasePath="true" doc:name="API Autodiscovery" />
 	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Configuration Properties" file="config-dev.yaml" key="hellomule2026">
 		<secure-properties:encrypt algorithm="Blowfish" mode="CBC" />
 	</secure-properties:config>
